@@ -1,0 +1,72 @@
+Task 5
+Il faut installé "libcurl" 
+
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <curl/curl.h>
+
+using namespace std;
+
+// Function to write data from the curl response to a string
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+// Function to extract information between two delimiters
+string extractData(const string& data, const string& start, const string& end) {
+    size_t startPos = data.find(start);
+    if (startPos == string::npos) return "";
+    startPos += start.length();
+    size_t endPos = data.find(end, startPos);
+    if (endPos == string::npos) return "";
+    return data.substr(startPos, endPos - startPos);
+}
+
+int main() {
+    CURL* curl;
+    CURLcode res;
+    string readBuffer;
+
+    curl = curl_easy_init();
+    if (curl) {
+        // Set the URL of the e-commerce website
+        curl_easy_setopt(curl, CURLOPT_URL, "http://example.com/products");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+
+        if (res != CURLE_OK) {
+            cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << endl;
+            return 1;
+        }
+
+        // Open CSV file to write data
+        ofstream csvFile("products.csv");
+        csvFile << "Name,Price,Rating\n";
+
+        size_t pos = 0;
+        while ((pos = readBuffer.find("<div class=\"product\"", pos)) != string::npos) {
+            string productBlock = extractData(readBuffer.substr(pos), "<div class=\"product\"", "</div>");
+            string name = extractData(productBlock, "<h2>", "</h2>");
+            string price = extractData(productBlock, "<span class=\"price\">", "</span>");
+            string rating = extractData(productBlock, "<span class=\"rating\">", "</span>");
+
+            // Write extracted data to CSV file
+            csvFile << name << "," << price << "," << rating << "\n";
+
+            pos += productBlock.length();
+        }
+
+        csvFile.close();
+        cout << "Data successfully written to products.csv" << endl;
+    } else {
+        cerr << "Failed to initialize curl" << endl;
+        return 1;
+    }
+
+    return 0;
+}
